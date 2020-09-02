@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,7 +41,8 @@ namespace SocketServer
                 IPAddress ip = IPAddress.Any;
 
                 PrintService.Write("Mode (tcp / udp): ", Print.EMode.question);
-                SocketMode mode = Console.ReadLine() == "tcp" ? SocketMode.Tcp : SocketMode.Udp;
+                PrintService.WriteLine("udp", ConsoleColor.Gray);
+                SocketMode mode = SocketMode.Udp;
 
                 PrintService.Write("Listen Port: ", Print.EMode.question);
                 int port = Convert.ToInt32(Console.ReadLine());
@@ -75,69 +77,6 @@ namespace SocketServer
 
                     if (mode == SocketMode.Tcp)
                     {
-                        server.Listen(100);
-
-                        List<Socket> clients = new List<Socket>();
-
-                        Task.Run(() =>
-                        {
-                            while (true)
-                            {
-                                string message = Console.ReadLine();
-                                if (message == "") continue;
-
-                                PrintService.Log($"Server: {message}", Print.EMode.message);
-
-                                foreach (var client in clients)
-                                {
-                                    byte[] byteData = Encoding.ASCII.GetBytes($"{message}\r\n");
-                                    client.Send(byteData);
-                                }
-                            }
-                        });
-
-                        while (true)
-                        {
-                            Socket client = server.Accept();
-                            EndPoint remote = client.RemoteEndPoint;
-
-                            PrintService.Log($"Client<{remote}> is connecting", Print.EMode.success);
-
-                            clients.Add(client);
-
-                            Task.Run(() =>
-                            {
-                                try
-                                {
-                                    while (IsSocketConnected(client))
-                                    {
-
-                                        byte[] bytes = new byte[1024];
-
-                                        int bytesRec = client.Receive(bytes);
-
-                                        string message = Encoding.ASCII.GetString(bytes, 0, bytesRec);
-                                        message = message.Replace("\n", "").Replace("\r", "");
-
-                                        if (!string.IsNullOrEmpty(message))
-                                        {
-                                            PrintService.Log($"Client<{remote}>: {message}", Print.EMode.message);
-                                        }
-                                    }
-
-                                    client.Shutdown(SocketShutdown.Both);
-                                    client.Close();
-                                }
-                                catch (Exception)
-                                {
-                                }
-                                finally
-                                {
-                                    clients = clients.Where((n) => n.Handle != client.Handle).ToList();
-                                    PrintService.Log($"Client<{remote}> was disconnected", Print.EMode.warning);
-                                }
-                            });
-                        }
                     }
                     else
                     {
@@ -147,14 +86,74 @@ namespace SocketServer
 
                             byte[] bytes = new byte[1024];
 
-                            int bytesRec = server.ReceiveFrom(bytes, ref remote);
-
-                            string message = Encoding.ASCII.GetString(bytes, 0, bytesRec);
-                            message = message.Replace("\n", "").Replace("\r", "");
-
-                            if (!string.IsNullOrEmpty(message))
+                            try
                             {
-                                PrintService.Log($"Client<{remote}>: {message}", Print.EMode.message);
+                                int bytesRec = server.ReceiveFrom(bytes, ref remote);
+                                if (bytesRec == 0) continue;
+
+                                if (bytesRec == 14)
+                                {
+                                    byte wiegandMode = bytes[10];
+
+                                    bytes = bytes.Skip(1).Take(9).ToArray();
+
+                                    string card = string.Join("", bytes.Select((n) => Convert.ToString(n, 2).PadLeft(8, '0')));
+                                    card = card.Substring(0, card.LastIndexOf("10101"));
+
+                                    if (wiegandMode == 35)
+                                    {
+                                        string[] cards = Regex.Split(card, "").Where((n) => !string.IsNullOrEmpty(n)).Skip(card.Length == 36 ? 3 : 2).Reverse().Skip(1).ToArray();
+
+                                        string head = string.Join("", cards.Skip(20).Reverse().ToArray());
+                                        head = string.IsNullOrEmpty(head) ? "0" : head;
+
+                                        string body = string.Join("", cards.Take(20).Reverse().ToArray());
+                                        body = string.IsNullOrEmpty(body) ? "0" : body;
+
+                                        PrintCard(remote, $"{Convert.ToInt64(head, 2)}{Convert.ToInt64(body, 2)}", "HID iCLASS Corporate 1000 35-bit (遠傳使用)");
+                                    }
+                                    else if (wiegandMode == 34)
+                                    {
+                                        string[] cards = Regex.Split(card, "").Where((n) => !string.IsNullOrEmpty(n)).Skip(card.Length == 35 ? 2 : 1).Reverse().Skip(1).ToArray();
+
+                                        string head = string.Join("", cards.Skip(16).Reverse().ToArray());
+                                        head = string.IsNullOrEmpty(head) ? "0" : head;
+
+                                        string body = string.Join("", cards.Take(16).Reverse().ToArray());
+                                        body = string.IsNullOrEmpty(body) ? "0" : body;
+
+                                        PrintCard(remote, $"{Convert.ToInt64(head, 2)}{Convert.ToInt64(body, 2)}", "標準Wiegand 34-bit (中大型企業用)");
+                                    }
+                                    else if (wiegandMode == 26)
+                                    {
+                                        string[] cards = Regex.Split(card, "").Where((n) => !string.IsNullOrEmpty(n)).Skip(card.Length == 27 ? 2 : 1).Reverse().Skip(1).ToArray();
+
+                                        string head = string.Join("", cards.Skip(16).Reverse().ToArray());
+                                        head = string.IsNullOrEmpty(head) ? "0" : head;
+
+                                        string body = string.Join("", cards.Take(16).Reverse().ToArray());
+                                        body = string.IsNullOrEmpty(body) ? "0" : body;
+
+                                        PrintCard(remote, $"{Convert.ToInt64(head, 2)}{Convert.ToInt64(body, 2)}", "標準Wiegand 26-bit (遠傳使用)");
+                                    }
+                                }
+                                else if (bytesRec == 15)
+                                {
+                                    byte type = bytes[13];
+
+                                    bytes = bytes.Skip(1).Take(10).ToArray();
+                                    string card = Encoding.ASCII.GetString(bytes);
+
+                                    if (type == 26)
+                                        PrintCard(remote, $"{Convert.ToInt64(card)}", "不分區Wiegand 26-bit (中小企業用)");
+                                    else if (type == 34)
+                                        PrintCard(remote, $"{Convert.ToInt64(card)}", "不分區Wiegand 34-bit (中小企業用)");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                ex = ExceptionHelper.GetReal(ex);
+                                PrintService.Log($"{string.Join("", bytes.Select((n) => Convert.ToString(n, 16).PadLeft(2, '0')))}, {ex.Message}", Print.EMode.error);
                             }
                         }
                     }
@@ -166,15 +165,20 @@ namespace SocketServer
             }
         }
 
-        private static bool IsSocketConnected(Socket client)
+        private static void PrintCard(EndPoint remote, string card, string type)
         {
             try
             {
-                return !(client.Poll(1, SelectMode.SelectRead) && client.Available == 0);
+                PrintService.Write($"{DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")} ---> ", Print.EMode.message);
+                PrintService.Write($"Client<{remote}>: ", Print.EMode.message);
+                PrintService.Write($"{$"{card}",10} ", Print.EMode.info);
+                PrintService.WriteLine($"({type})", Print.EMode.message);
+
+                LogService.Write($"{DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")}  Message ---> [{Thread.CurrentThread.ManagedThreadId}] Client<{remote}>: {card} ({type})");
             }
-            catch (SocketException)
+            catch (Exception)
             {
-                return false;
+                throw;
             }
         }
     }

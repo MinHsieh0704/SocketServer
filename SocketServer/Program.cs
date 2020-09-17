@@ -40,7 +40,8 @@ namespace SocketServer
                 IPAddress ip = IPAddress.Any;
 
                 PrintService.Write("Mode (tcp / udp): ", Print.EMode.question);
-                SocketMode mode = Console.ReadLine() == "tcp" ? SocketMode.Tcp : SocketMode.Udp;
+                PrintService.WriteLine("tcp", ConsoleColor.Gray);
+                SocketMode mode = SocketMode.Tcp;
 
                 PrintService.Write("Listen Port: ", Print.EMode.question);
                 int port = Convert.ToInt32(Console.ReadLine());
@@ -79,23 +80,6 @@ namespace SocketServer
 
                         List<Socket> clients = new List<Socket>();
 
-                        Task.Run(() =>
-                        {
-                            while (true)
-                            {
-                                string message = Console.ReadLine();
-                                if (message == "") continue;
-
-                                PrintService.Log($"Server: {message}", Print.EMode.message);
-
-                                foreach (var client in clients)
-                                {
-                                    byte[] byteData = Encoding.ASCII.GetBytes($"{message}\r\n");
-                                    client.Send(byteData);
-                                }
-                            }
-                        });
-
                         while (true)
                         {
                             Socket client = server.Accept();
@@ -122,6 +106,9 @@ namespace SocketServer
                                         if (!string.IsNullOrEmpty(message))
                                         {
                                             PrintService.Log($"Client<{remote}>: {message}", Print.EMode.message);
+
+                                            byte[] byteData = Encoding.ASCII.GetBytes($"OK\r\n");
+                                            client.Send(byteData);
                                         }
                                     }
 
@@ -137,25 +124,6 @@ namespace SocketServer
                                     PrintService.Log($"Client<{remote}> was disconnected", Print.EMode.warning);
                                 }
                             });
-                        }
-                    }
-                    else
-                    {
-                        while (true)
-                        {
-                            EndPoint remote = new IPEndPoint(ip, port);
-
-                            byte[] bytes = new byte[1024];
-
-                            int bytesRec = server.ReceiveFrom(bytes, ref remote);
-
-                            string message = Encoding.ASCII.GetString(bytes, 0, bytesRec);
-                            message = message.Replace("\n", "").Replace("\r", "");
-
-                            if (!string.IsNullOrEmpty(message))
-                            {
-                                PrintService.Log($"Client<{remote}>: {message}", Print.EMode.message);
-                            }
                         }
                     }
                 }

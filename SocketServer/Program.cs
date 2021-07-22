@@ -47,6 +47,8 @@ namespace SocketServer
                 PrintService.Write("Listen Port: ", Print.EMode.question);
                 int port = Convert.ToInt32(Console.ReadLine());
 
+                PrintService.WriteLine("", Print.EMode.message);
+
                 StartClient(ip, port, mode);
             }
             catch (Exception ex)
@@ -106,11 +108,13 @@ namespace SocketServer
 
                                         string head = string.Join("", cards.Skip(20).Reverse().ToArray());
                                         head = string.IsNullOrEmpty(head) ? "0" : head;
+                                        head = Convert.ToInt64(head, 2).ToString().PadLeft(5, '0');
 
                                         string body = string.Join("", cards.Take(20).Reverse().ToArray());
                                         body = string.IsNullOrEmpty(body) ? "0" : body;
+                                        body = Convert.ToInt64(body, 2).ToString().PadLeft(5, '0');
 
-                                        PrintCard(remote, $"{Convert.ToInt64(head, 2)}{Convert.ToInt64(body, 2)}", "HID iCLASS Corporate 1000 35-bit (遠傳使用)");
+                                        PrintCard(remote, $"{head}:{body}", "HID iCLASS Corporate 1000 35-bit (遠傳使用)");
                                     }
                                     else if (wiegandMode == 34)
                                     {
@@ -118,11 +122,13 @@ namespace SocketServer
 
                                         string head = string.Join("", cards.Skip(16).Reverse().ToArray());
                                         head = string.IsNullOrEmpty(head) ? "0" : head;
+                                        head = Convert.ToInt64(head, 2).ToString().PadLeft(5, '0');
 
                                         string body = string.Join("", cards.Take(16).Reverse().ToArray());
                                         body = string.IsNullOrEmpty(body) ? "0" : body;
+                                        body = Convert.ToInt64(body, 2).ToString().PadLeft(5, '0');
 
-                                        PrintCard(remote, $"{Convert.ToInt64(head, 2)}{Convert.ToInt64(body, 2)}", "標準Wiegand 34-bit (中大型企業用)");
+                                        PrintCard(remote, $"{head}:{body}", "標準Wiegand 34-bit (中大型企業用)");
                                     }
                                     else if (wiegandMode == 26)
                                     {
@@ -130,24 +136,31 @@ namespace SocketServer
 
                                         string head = string.Join("", cards.Skip(16).Reverse().ToArray());
                                         head = string.IsNullOrEmpty(head) ? "0" : head;
+                                        head = Convert.ToInt64(head, 2).ToString().PadLeft(5, '0');
 
                                         string body = string.Join("", cards.Take(16).Reverse().ToArray());
                                         body = string.IsNullOrEmpty(body) ? "0" : body;
+                                        body = Convert.ToInt64(body, 2).ToString().PadLeft(5, '0');
 
-                                        PrintCard(remote, $"{Convert.ToInt64(head, 2)}{Convert.ToInt64(body, 2)}", "標準Wiegand 26-bit (遠傳使用)");
+                                        PrintCard(remote, $"{head}:{body}", "標準Wiegand 26-bit (遠傳使用)");
                                     }
                                 }
                                 else if (bytesRec == 15)
                                 {
                                     byte type = bytes[13];
-
                                     bytes = bytes.Skip(1).Take(10).ToArray();
+
                                     string card = Encoding.ASCII.GetString(bytes);
+                                    card = card.PadLeft(10, '0');
 
                                     if (type == 26)
-                                        PrintCard(remote, $"{Convert.ToInt64(card)}", "不分區Wiegand 26-bit (中小企業用)");
+                                    {
+                                        PrintCard(remote, $"{card}", "不分區Wiegand 26-bit (中小企業用)");
+                                    }
                                     else if (type == 34)
-                                        PrintCard(remote, $"{Convert.ToInt64(card)}", "不分區Wiegand 34-bit (中小企業用)");
+                                    {
+                                        PrintCard(remote, $"{card}", "不分區Wiegand 34-bit (中小企業用)");
+                                    }
                                 }
                             }
                             catch (Exception ex)
